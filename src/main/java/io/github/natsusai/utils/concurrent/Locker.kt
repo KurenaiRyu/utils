@@ -1,140 +1,137 @@
-package io.github.natsusai.utils.concurrent;
+package io.github.natsusai.utils.concurrent
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.slf4j.LoggerFactory
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.Lock
 
 //TODO: 根据特定的id或者内容进行锁定
-
 /**
  * 锁工具类
  *
  * @author Kurenai
  * @since 2020-06-28 11:34
  */
+class Locker {
 
-public class Locker {
-
-  private static final int      MAX_COUNT = 3;
-  private static final long     TIME_OUT  = 500;
-  private static final TimeUnit TIME_UNIT = TimeUnit.MILLISECONDS;
-
-  private static final Logger log = LoggerFactory.getLogger(Locker.class);
-
-  /**
-   * 尝试获取锁并执行传入方法
-   *
-   * @param lock     锁对象
-   * @param executor 被执行的方法
-   * @param <T>      返回值类型
-   * @return 返回被执行方法所返回的结果
-   * @throws Exception            执行方法异常
-   * @throws InterruptedException 获取锁失败
-   * @throws LockerException      获取锁超过重复次数上限
-   */
-  public static <T> T tryLock(Lock lock, Executor<T> executor) throws Exception {
-    return tryLock(lock, TIME_OUT, TIME_UNIT, executor);
-  }
-
-  /**
-   * 尝试获取锁并执行传入方法
-   *
-   * @param lock     锁对象
-   * @param timeOut  每次获取锁超时时间
-   * @param timeUnit 时间单位
-   * @param executor 被执行的方法
-   * @param <T>      返回值类型
-   * @return 返回被执行方法所返回的结果
-   * @throws Exception            执行方法异常
-   * @throws InterruptedException 获取锁失败
-   * @throws LockerException      获取锁超过重复次数上限
-   */
-  public static <T> T tryLock(Lock lock, long timeOut, TimeUnit timeUnit, Executor<T> executor)
-      throws Exception {
-    boolean locked = false;
-    T       result;
-    try {
-      locked = tryLock(lock, timeOut, timeUnit);
-      result = executor.execute();
-    } finally {
-      if (locked) {
-        lock.unlock();
-      }
+    companion object{
+        private const val MAX_COUNT = 3
+        private const val TIME_OUT: Long = 500
+        private val TIME_UNIT = TimeUnit.MILLISECONDS
     }
-    return result;
-  }
+    private val log = LoggerFactory.getLogger(Locker::class.java)
 
-  /**
-   * 直接获取锁并执行传入方法
-   *
-   * @param lock     锁对象
-   * @param executor 被执行的方法
-   * @param <T>      返回值类型
-   * @return 返回被执行方法所返回的结果
-   * @throws Exception            执行方法异常
-   * @throws InterruptedException 获取锁失败
-   */
-  public static <T> T lock(Lock lock, Executor<T> executor) throws Exception {
-    T result;
-    try {
-      lock.lockInterruptibly();
-      result = executor.execute();
-    } finally {
-      try {
-        lock.unlock();
-      } catch (Exception e) {
-        log.error(e.getMessage(), e);
-      }
+    /**
+     * 尝试获取锁并执行传入方法
+     *
+     * @param lock     锁对象
+     * @param executor 被执行的方法
+     * @param <T>      返回值类型
+     * @return 返回被执行方法所返回的结果
+     * @throws Exception            执行方法异常
+     * @throws InterruptedException 获取锁失败
+     * @throws LockerException      获取锁超过重复次数上限
+    </T> */
+    @Throws(Exception::class)
+    fun <T> tryLock(lock: Lock, executor: Executor<T>): T {
+        return tryLock(lock, TIME_OUT, TIME_UNIT, executor)
     }
-    return result;
-  }
 
-  /**
-   * 尝试获取锁直到重复次数上限
-   *
-   * @param lock     锁对象
-   * @param timeOut  超时时间
-   * @param timeUnit 时间单位
-   * @return 成功则返回true
-   * @throws InterruptedException 获取锁失败
-   * @throws LockerException      获取锁超过重复次数上限
-   */
-  private static boolean tryLock(Lock lock, long timeOut, TimeUnit timeUnit)
-      throws InterruptedException, ExecutionException, LockerException {
-    boolean                  locked   = (lock.tryLock() || lock.tryLock(timeOut, timeUnit));
-    int                      count    = 1;
-    ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-    while (!locked) {
-      if (count >= MAX_COUNT) {
-        throw new LockerException("Retry over max times [" + MAX_COUNT + "].");
-      }
-      ScheduledFuture<Boolean> future = executor.schedule(() -> {
+    /**
+     * 尝试获取锁并执行传入方法
+     *
+     * @param lock     锁对象
+     * @param timeOut  每次获取锁超时时间
+     * @param timeUnit 时间单位
+     * @param executor 被执行的方法
+     * @param <T>      返回值类型
+     * @return 返回被执行方法所返回的结果
+     * @throws Exception            执行方法异常
+     * @throws InterruptedException 获取锁失败
+     * @throws LockerException      获取锁超过重复次数上限
+    </T> */
+    @Throws(Exception::class)
+    fun <T> tryLock(lock: Lock, timeOut: Long, timeUnit: TimeUnit, executor: Executor<T>): T {
+        var locked = false
+        val result: T
         try {
-          return (lock.tryLock() || lock.tryLock(timeOut, timeUnit));
-        } catch (InterruptedException e) {
-          log.error(e.getMessage(), e);
+            locked = tryLock(lock, timeOut, timeUnit)
+            result = executor.execute()
+        } finally {
+            if (locked) {
+                lock.unlock()
+            }
         }
-        return false;
-      }, 200, TimeUnit.MILLISECONDS);
-      locked = future.get();
-      count++;
+        return result
     }
-    return true;
-  }
 
-  /**
-   * Executor
-   *
-   * @param <T> 返回值类型
-   */
-  @FunctionalInterface
-  public interface Executor<T> {
+    /**
+     * 直接获取锁并执行传入方法
+     *
+     * @param lock     锁对象
+     * @param executor 被执行的方法
+     * @param <T>      返回值类型
+     * @return 返回被执行方法所返回的结果
+     * @throws Exception            执行方法异常
+     * @throws InterruptedException 获取锁失败
+    </T> */
+    @Throws(Exception::class)
+    fun <T> lock(lock: Lock, executor: Executor<T>): T {
+        val result: T
+        result = try {
+            lock.lockInterruptibly()
+            executor.execute()
+        } finally {
+            try {
+                lock.unlock()
+            } catch (e: Exception) {
+                log.error(e.message, e)
+            }
+        }
+        return result
+    }
 
-    T execute() throws Exception;
-  }
+    /**
+     * 尝试获取锁直到重复次数上限
+     *
+     * @param lock     锁对象
+     * @param timeOut  超时时间
+     * @param timeUnit 时间单位
+     * @return 成功则返回true
+     * @throws InterruptedException 获取锁失败
+     * @throws LockerException      获取锁超过重复次数上限
+     */
+    @Throws(InterruptedException::class, ExecutionException::class, LockerException::class)
+    private fun tryLock(lock: Lock, timeOut: Long, timeUnit: TimeUnit): Boolean {
+        var locked = lock.tryLock() || lock.tryLock(timeOut, timeUnit)
+        var count = 1
+        val executor = Executors.newSingleThreadScheduledExecutor()
+        while (!locked) {
+            if (count >= MAX_COUNT) {
+                throw LockerException("Retry over max times [" + MAX_COUNT + "].")
+            }
+            val future = executor.schedule<Boolean>({
+                try {
+                    return@schedule lock.tryLock() || lock.tryLock(timeOut, timeUnit)
+                } catch (e: InterruptedException) {
+                    log.error(e.message, e)
+                }
+                false
+            }, 200, TimeUnit.MILLISECONDS)
+            locked = future.get()
+            count++
+        }
+        return true
+    }
+
+    /**
+     * Executor
+     *
+     * @param <T> 返回值类型
+    </T> */
+    fun interface Executor<T> {
+        @Throws(Exception::class)
+        fun execute(): T
+    }
 }

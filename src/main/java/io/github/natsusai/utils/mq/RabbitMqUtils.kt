@@ -1,11 +1,11 @@
-package io.github.natsusai.utils.mq;
+package io.github.natsusai.utils.mq
 
-import com.rabbitmq.client.Channel;
-import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.rabbitmq.client.Channel
+import io.github.natsusai.utils.mq.RabbitMqUtils
+import org.slf4j.LoggerFactory
+import org.springframework.amqp.core.Message
+import org.springframework.amqp.rabbit.core.RabbitTemplate
+import java.util.*
 
 /**
  * RabbitMQ工具
@@ -14,360 +14,371 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
  * @author Kurenai
  * @since 2020-09-29 17:41
  */
+class RabbitMqUtils {
+    private val retryTimes: Int
+    private val template: RabbitTemplate
+    private val channel: Channel
+    private val message: Message
 
-public class RabbitMqUtils {
-
-  private static final Logger log = LoggerFactory.getLogger(RabbitMqUtils.class);
-
-  private static final int RETRY_TIMES = 3;
-
-  private final int            retryTimes;
-  private final RabbitTemplate template;
-  private final Channel        channel;
-  private final Message        message;
-
-  /**
-   * @param retryTimes 重试次数
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   */
-  public RabbitMqUtils(int retryTimes, RabbitTemplate template, Channel channel, Message message) {
-    this.retryTimes = retryTimes;
-    this.template   = template;
-    this.channel    = channel;
-    this.message    = message;
-  }
-
-  /**
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   */
-  public RabbitMqUtils(RabbitTemplate template, Channel channel, Message message) {
-    this.retryTimes = RETRY_TIMES;
-    this.template   = template;
-    this.channel    = channel;
-    this.message    = message;
-  }
-
-  /**
-   * 获取X-Death 计数
-   * @return X-Death 计数
-   */
-  public long getXDeathCount() {
-    return getXDeathCount(message);
-  }
-
-  /**
-   * 获取DeliveryTag
-   * @return DeliveryTag
-   */
-  public long getDeliveryTag() {
-    return getDeliveryTag(message);
-  }
-
-
-  /**
-   * 获取ReDeliveryTag
-   * @return ReDeliveryTag
-   */
-  public boolean getReDeliveryTag() {
-    return getReDeliveryTag(message);
-  }
-
-  /**
-   * 简单重试
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次，并做ack
-   */
-  public void simpleRetry() throws Exception {
-    simpleRetry(true);
-  }
-
-  /**
-   * 简单重试
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次
-   * @param ack 是否执行ack
-   */
-  public void simpleRetry(boolean ack) throws Exception {
-    simpleRetry(channel, message, ack);
-  }
-
-  /**
-   * 简单重试，否则执行传入任务
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务，并执行ack
-   * @param task 被执行任务
-   */
-  public void simpleRetryOrExec(Task task) throws Exception {
-    simpleRetryOrExec(true, task);
-  }
-
-  /**
-   * 简单重试，否则执行传入任务
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务
-   * @param ack 是否执行ack
-   * @param task 执行任务
-   */
-  public void simpleRetryOrExec(boolean ack, Task task) throws Exception {
-    simpleRetryOrExec(channel, message, ack, task);
-  }
-
-  /**
-   * 重试
-   * @param dlx 死信队列名称
-   */
-  public void retry(String dlx) throws Exception {
-    retry(dlx, getReceivedRoutingKey());
-  }
-
-  /**
-   * 重试
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   */
-  public void retry(String dlx, String routingKey) throws Exception {
-    retry(dlx, routingKey, true);
-  }
-
-  /**
-   * 重试
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param ack 是否执行ack
-   */
-  public void retry(String dlx, String routingKey, boolean ack) throws Exception {
-    doRetry(template, channel, message, dlx, routingKey, retryTimes, ack, () -> {});
-  }
-
-  /**
-   * 重试，否则执行传入任务
-   * @param dlx 死信队列名称
-   * @param task 被执行任务
-   */
-  public void retryOrExec(String dlx, Task task) throws Exception {
-    retryOrExec(dlx, getReceivedRoutingKey(), task);
-  }
-
-  /**
-   * 重试，否则执行传入任务
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param task 被执行任务
-   */
-  public void retryOrExec(String dlx, String routingKey, Task task) throws Exception {
-    retryOrExec(dlx, routingKey, true, task);
-  }
-
-  /**
-   * 重试，否则执行传入任务
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param ack 是否执行ack
-   * @param task 被执行任务
-   */
-  public void retryOrExec(String dlx, String routingKey, boolean ack, Task task) throws Exception {
-    doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack, task);
-  }
-
-  /**
-   * 获取X-Death 计数
-   *
-   * @param message Message
-   * @return X-Death 计数
-   */
-  public static long getXDeathCount(Message message) {
-    return Optional.ofNullable(message.getMessageProperties().getXDeathHeader())
-        .flatMap(x -> x.stream().findFirst())
-        .map(d -> (long) d.get("count"))
-        .orElse(0L);
-  }
-
-  /**
-   * 获取DeliveryTag
-   * @return DeliveryTag
-   */
-  public static long getDeliveryTag(Message message) {
-    return message.getMessageProperties().getDeliveryTag();
-  }
-
-  /**
-   * 获取ReDeliveryTag
-   * @return ReDeliveryTag
-   */
-  public static boolean getReDeliveryTag(Message message) {
-    return Optional.ofNullable(message.getMessageProperties().getRedelivered()).orElse(false);
-  }
-
-  /**
-   * 简单重试
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次，失败会执行ack
-   * @param channel Channel
-   * @param message Message
-   */
-  public static void simpleRetry(Channel channel, Message message) throws Exception {
-    simpleRetry(channel, message, true);
-  }
-
-  /**
-   * 简单重试
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次
-   * @param channel Channel
-   * @param message Message
-   * @param ack 是否执行ack
-   */
-  public static void simpleRetry(Channel channel, Message message, boolean ack) throws Exception {
-    doSimpleRetry(channel, message, ack, () -> {});
-  }
-
-  /**
-   * 简单重试，否则执行传入任务
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务，并执行ack
-   * @param channel Channel
-   * @param message Message
-   * @param task 执行任务
-   */
-  public static void simpleRetryOrExec(Channel channel, Message message, Task task) throws Exception {
-    doSimpleRetry(channel, message, true, task);
-  }
-
-  /**
-   * 简单重试，否则执行传入任务
-   * <p/>
-   * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务
-   * @param channel Channel
-   * @param message Message
-   * @param ack 是否执行ack
-   * @param task 执行任务
-   */
-  public static void simpleRetryOrExec(Channel channel, Message message, boolean ack, Task task) throws Exception {
-    doSimpleRetry(channel, message, ack, task);
-  }
-
-  /**
-   * 重试，失败会执行ack
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   */
-  public static void retry(RabbitTemplate template, Channel channel, Message message, String dlx) throws Exception {
-    retry(template, channel, message, dlx, message.getMessageProperties().getReceivedRoutingKey());
-  }
-
-  /**
-   * 重试，失败会执行ack
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   */
-  public static void retry(RabbitTemplate template, Channel channel, Message message, String dlx, String routingKey)
-      throws Exception {
-    retry(template, channel, message, dlx, routingKey, true);
-  }
-
-  /**
-   * 重试
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param ack 是否执行ack
-   */
-  public static void retry(RabbitTemplate template, Channel channel, Message message, String dlx, String routingKey,
-      boolean ack)
-      throws Exception {
-    doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack, () -> {});
-  }
-
-  /**
-   * 重试，否则执行传入任务，并执行ack
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   * @param task 被执行任务
-   */
-  public static void retryOrExec(
-      RabbitTemplate template, Channel channel, Message message, String dlx, Task task) throws Exception {
-    retryOrExec(template, channel, message, dlx, message.getMessageProperties().getReceivedRoutingKey(), task);
-  }
-
-  /**
-   * 重试，否则执行传入任务，并执行ack
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param task 被执行任务
-   */
-  public static void retryOrExec(
-      RabbitTemplate template, Channel channel, Message message, String dlx, String routingKey, Task task)
-      throws Exception {
-    retryOrExec(template, channel, message, dlx, routingKey, true, task);
-  }
-
-  /**
-   * 重试，否则执行传入任务
-   * @param template RabbitTemplate
-   * @param channel Channel
-   * @param message Message
-   * @param dlx 死信队列名称
-   * @param routingKey 路由键值
-   * @param ack 是否执行ack
-   * @param task 被执行任务
-   */
-  public static void retryOrExec(
-      RabbitTemplate template, Channel channel, Message message, String dlx, String routingKey, boolean ack, Task task)
-      throws Exception {
-    doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack, task);
-  }
-
-  private String getReceivedRoutingKey() {
-    return message.getMessageProperties().getReceivedRoutingKey();
-  }
-
-  private static void doRetry(
-      RabbitTemplate template, Channel channel, Message message, String dlx, String routingKey, int retryTimes,
-      boolean ack, Task task) throws Exception {
-    final long    xDeathCount = getXDeathCount(message);
-    final boolean canRetry    = xDeathCount < retryTimes;
-    log.debug("retry times: {}", xDeathCount);
-    if (canRetry) {
-      template.convertAndSend(dlx, routingKey, message);
-    } else {
-      task.execute();
+    /**
+     * @param retryTimes 重试次数
+     * @param template RabbitTemplate
+     * @param channel Channel
+     * @param message Message
+     */
+    constructor(retryTimes: Int, template: RabbitTemplate, channel: Channel, message: Message) {
+        this.retryTimes = retryTimes
+        this.template = template
+        this.channel = channel
+        this.message = message
     }
-    if (ack) {
-      channel.basicAck(getDeliveryTag(message), false);
-    }
-  }
 
-  private static void doSimpleRetry(Channel channel, Message message, boolean ack, Task task)
-      throws Exception {
-    long deliveryTag = getDeliveryTag(message);
-    if (getReDeliveryTag(message)) {
-      task.execute();
-      if (ack) {
-        channel.basicAck(deliveryTag, false);
-      }
-    } else {
-      channel.basicReject(deliveryTag, true);
+    /**
+     * @param template RabbitTemplate
+     * @param channel Channel
+     * @param message Message
+     */
+    constructor(template: RabbitTemplate, channel: Channel, message: Message) {
+        retryTimes = RETRY_TIMES
+        this.template = template
+        this.channel = channel
+        this.message = message
     }
-  }
 
-  @FunctionalInterface
-  public interface Task {
-    void execute() throws Exception;
-  }
+    /**
+     * 获取X-Death 计数
+     * @return X-Death 计数
+     */
+    val xDeathCount: Long
+        get() = getXDeathCount(message)
+
+    /**
+     * 获取DeliveryTag
+     * @return DeliveryTag
+     */
+    val deliveryTag: Long
+        get() = getDeliveryTag(message)
+
+    /**
+     * 获取ReDeliveryTag
+     * @return ReDeliveryTag
+     */
+    val reDeliveryTag: Boolean
+        get() = getReDeliveryTag(message)
+    /**
+     * 简单重试
+     *
+     *
+     * 不使用死信队列进行重试，仅重试一次
+     * @param ack 是否执行ack
+     */
+    /**
+     * 简单重试
+     *
+     *
+     * 不使用死信队列进行重试，仅重试一次，并做ack
+     */
+    @JvmOverloads
+    @Throws(Exception::class)
+    fun simpleRetry(ack: Boolean = true) {
+        simpleRetry(channel, message, ack)
+    }
+
+    /**
+     * 简单重试，否则执行传入任务
+     *
+     *
+     * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务，并执行ack
+     * @param task 被执行任务
+     */
+    @Throws(Exception::class)
+    fun simpleRetryOrExec(task: Task) {
+        simpleRetryOrExec(true, task)
+    }
+
+    /**
+     * 简单重试，否则执行传入任务
+     *
+     *
+     * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务
+     * @param ack 是否执行ack
+     * @param task 执行任务
+     */
+    @Throws(Exception::class)
+    fun simpleRetryOrExec(ack: Boolean, task: Task) {
+        simpleRetryOrExec(channel, message, ack, task)
+    }
+    /**
+     * 重试
+     * @param dlx 死信队列名称
+     * @param routingKey 路由键值
+     * @param ack 是否执行ack
+     */
+    /**
+     * 重试
+     * @param dlx 死信队列名称
+     * @param routingKey 路由键值
+     */
+    /**
+     * 重试
+     * @param dlx 死信队列名称
+     */
+    @JvmOverloads
+    @Throws(Exception::class)
+    fun retry(dlx: String, routingKey: String = receivedRoutingKey, ack: Boolean = true) {
+        doRetry(template, channel, message, dlx, routingKey, retryTimes, ack) {}
+    }
+
+    /**
+     * 重试，否则执行传入任务
+     * @param dlx 死信队列名称
+     * @param task 被执行任务
+     */
+    @Throws(Exception::class)
+    fun retryOrExec(dlx: String, task: Task) {
+        retryOrExec(dlx, receivedRoutingKey, task)
+    }
+
+    /**
+     * 重试，否则执行传入任务
+     * @param dlx 死信队列名称
+     * @param routingKey 路由键值
+     * @param task 被执行任务
+     */
+    @Throws(Exception::class)
+    fun retryOrExec(dlx: String, routingKey: String, task: Task) {
+        retryOrExec(dlx, routingKey, true, task)
+    }
+
+    /**
+     * 重试，否则执行传入任务
+     * @param dlx 死信队列名称
+     * @param routingKey 路由键值
+     * @param ack 是否执行ack
+     * @param task 被执行任务
+     */
+    @Throws(Exception::class)
+    fun retryOrExec(dlx: String, routingKey: String, ack: Boolean, task: Task) {
+        doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack, task)
+    }
+
+    private val receivedRoutingKey: String
+        private get() = message.messageProperties.receivedRoutingKey
+
+    fun interface Task {
+        @Throws(Exception::class)
+        fun execute()
+    }
+
+    companion object {
+        private val log = LoggerFactory.getLogger(RabbitMqUtils::class.java)
+        private const val RETRY_TIMES = 3
+
+        /**
+         * 获取X-Death 计数
+         *
+         * @param message Message
+         * @return X-Death 计数
+         */
+        fun getXDeathCount(message: Message): Long {
+            return Optional.ofNullable(message.messageProperties.xDeathHeader)
+                .flatMap { x: List<Map<String?, *>> -> x.stream().findFirst() }
+                .map { d: Map<String?, *> -> d["count"] as Long }
+                .orElse(0L)
+        }
+
+        /**
+         * 获取DeliveryTag
+         * @return DeliveryTag
+         */
+        fun getDeliveryTag(message: Message): Long {
+            return message.messageProperties.deliveryTag
+        }
+
+        /**
+         * 获取ReDeliveryTag
+         * @return ReDeliveryTag
+         */
+        fun getReDeliveryTag(message: Message): Boolean {
+            return Optional.ofNullable(message.messageProperties.redelivered).orElse(false)
+        }
+        /**
+         * 简单重试
+         *
+         *
+         * 不使用死信队列进行重试，仅重试一次
+         * @param channel Channel
+         * @param message Message
+         * @param ack 是否执行ack
+         */
+        /**
+         * 简单重试
+         *
+         *
+         * 不使用死信队列进行重试，仅重试一次，失败会执行ack
+         * @param channel Channel
+         * @param message Message
+         */
+        @JvmOverloads
+        @Throws(Exception::class)
+        fun simpleRetry(channel: Channel, message: Message, ack: Boolean = true) {
+            doSimpleRetry(channel, message, ack) {}
+        }
+
+        /**
+         * 简单重试，否则执行传入任务
+         *
+         *
+         * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务，并执行ack
+         * @param channel Channel
+         * @param message Message
+         * @param task 执行任务
+         */
+        @Throws(Exception::class)
+        fun simpleRetryOrExec(channel: Channel, message: Message, task: Task) {
+            doSimpleRetry(channel, message, true, task)
+        }
+
+        /**
+         * 简单重试，否则执行传入任务
+         *
+         *
+         * 不使用死信队列进行重试，仅重试一次；若重试失败则执行传入的任务
+         * @param channel Channel
+         * @param message Message
+         * @param ack 是否执行ack
+         * @param task 执行任务
+         */
+        @Throws(Exception::class)
+        fun simpleRetryOrExec(channel: Channel, message: Message, ack: Boolean, task: Task) {
+            doSimpleRetry(channel, message, ack, task)
+        }
+        /**
+         * 重试
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         * @param routingKey 路由键值
+         * @param ack 是否执行ack
+         */
+        /**
+         * 重试，失败会执行ack
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         * @param routingKey 路由键值
+         */
+        /**
+         * 重试，失败会执行ack
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         */
+        @JvmOverloads
+        @Throws(Exception::class)
+        fun retry(
+            template: RabbitTemplate,
+            channel: Channel,
+            message: Message,
+            dlx: String,
+            routingKey: String = message.messageProperties.receivedRoutingKey,
+            ack: Boolean = true
+        ) {
+            doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack) {}
+        }
+
+        /**
+         * 重试，否则执行传入任务，并执行ack
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         * @param task 被执行任务
+         */
+        @Throws(Exception::class)
+        fun retryOrExec(
+            template: RabbitTemplate, channel: Channel, message: Message, dlx: String, task: Task
+        ) {
+            retryOrExec(template, channel, message, dlx, message.messageProperties.receivedRoutingKey, task)
+        }
+
+        /**
+         * 重试，否则执行传入任务，并执行ack
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         * @param routingKey 路由键值
+         * @param task 被执行任务
+         */
+        @Throws(Exception::class)
+        fun retryOrExec(
+            template: RabbitTemplate, channel: Channel, message: Message, dlx: String, routingKey: String, task: Task
+        ) {
+            retryOrExec(template, channel, message, dlx, routingKey, true, task)
+        }
+
+        /**
+         * 重试，否则执行传入任务
+         * @param template RabbitTemplate
+         * @param channel Channel
+         * @param message Message
+         * @param dlx 死信队列名称
+         * @param routingKey 路由键值
+         * @param ack 是否执行ack
+         * @param task 被执行任务
+         */
+        @Throws(Exception::class)
+        fun retryOrExec(
+            template: RabbitTemplate,
+            channel: Channel,
+            message: Message,
+            dlx: String,
+            routingKey: String,
+            ack: Boolean,
+            task: Task
+        ) {
+            doRetry(template, channel, message, dlx, routingKey, RETRY_TIMES, ack, task)
+        }
+
+        @Throws(Exception::class)
+        private fun doRetry(
+            template: RabbitTemplate,
+            channel: Channel,
+            message: Message,
+            dlx: String,
+            routingKey: String,
+            retryTimes: Int,
+            ack: Boolean,
+            task: Task
+        ) {
+            val xDeathCount = getXDeathCount(message)
+            val canRetry = xDeathCount < retryTimes
+            log.debug("retry times: {}", xDeathCount)
+            if (canRetry) {
+                template.convertAndSend(dlx, routingKey, message)
+            } else {
+                task.execute()
+            }
+            if (ack) {
+                channel.basicAck(getDeliveryTag(message), false)
+            }
+        }
+
+        @Throws(Exception::class)
+        private fun doSimpleRetry(channel: Channel, message: Message, ack: Boolean, task: Task) {
+            val deliveryTag = getDeliveryTag(message)
+            if (getReDeliveryTag(message)) {
+                task.execute()
+                if (ack) {
+                    channel.basicAck(deliveryTag, false)
+                }
+            } else {
+                channel.basicReject(deliveryTag, true)
+            }
+        }
+    }
 }
