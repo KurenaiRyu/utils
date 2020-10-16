@@ -1,3 +1,3 @@
 
-rootProject.name = "java-utils-kotlin"
+rootProject.name = "kotlin-utils"
 

@@ -1,2 +1,2 @@
 # Kotlin Utils
-记录一些个人工具类
+由 Java Utils 转换而来
