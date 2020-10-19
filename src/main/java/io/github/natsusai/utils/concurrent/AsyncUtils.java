@@ -64,7 +64,7 @@ public class AsyncUtils {
    */
   public static void execute(long timeout, TimeUnit timeUnit, Task task)
       throws Exception {
-    FutureTask<Object> future = new FutureTask<>(() -> doTask(task));
+    FutureTask<Object> future = new FutureTask(() -> doTask(task));
     new Thread(future).start();
     getResult(future, timeout, timeUnit);
   }
@@ -94,16 +94,13 @@ public class AsyncUtils {
    * @return 返回执行结果
    * @throws Exception 执行任务当中出现异常
    */
-  private static Object getResult(Future<?> future, long timeout, TimeUnit timeUnit)
+  private static <R> R getResult(Future<R> future, long timeout, TimeUnit timeUnit)
       throws Exception {
-    Object result;
+    R result;
     try {
       result = future.get(timeout, timeUnit);
     } catch (TimeoutException ignored) {
       return null;
-    }
-    if (result instanceof Exception) {
-      throw (Exception) result;
     }
     return result;
   }
@@ -114,12 +111,8 @@ public class AsyncUtils {
    * @param task 任务
    * @return 异常或是执行结果对象
    */
-  private static Object doTask(Callable<?> task) {
-    try {
-      return task.call();
-    } catch (Exception e) {
-      return e;
-    }
+  private static Object doTask(Callable<?> task) throws Exception {
+    return task.call();
   }
 
   /**
@@ -128,12 +121,8 @@ public class AsyncUtils {
    * @param task 任务
    * @return 异常对象
    */
-  private static Object doTask(Task task) {
-    try {
-      task.run();
-    } catch (Exception e) {
-      return e;
-    }
+  private static Object doTask(Task task) throws Exception {
+    task.run();
     return null;
   }
 
