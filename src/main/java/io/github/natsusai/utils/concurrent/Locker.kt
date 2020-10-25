@@ -1,6 +1,7 @@
 package io.github.natsusai.utils.concurrent
 
 import org.slf4j.LoggerFactory
+import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -26,7 +27,7 @@ class Locker {
      * 尝试获取锁并执行传入方法
      *
      * @param lock     锁对象
-     * @param executor 被执行的方法
+     * @param task 被执行的方法
      * @param <T>      返回值类型
      * @return 返回被执行方法所返回的结果
      * @throws Exception            执行方法异常
@@ -34,8 +35,8 @@ class Locker {
      * @throws LockerException      获取锁超过重复次数上限
     </T> */
     @Throws(Exception::class)
-    fun <T> tryLock(lock: Lock, executor: Executor<T>): T {
-        return tryLock(lock, TIME_OUT, TIME_UNIT, executor)
+    fun <T> tryLock(lock: Lock, task: Callable<T>): T {
+        return tryLock(lock, TIME_OUT, TIME_UNIT, task)
     }
 
     /**
@@ -44,7 +45,7 @@ class Locker {
      * @param lock     锁对象
      * @param timeOut  每次获取锁超时时间
      * @param timeUnit 时间单位
-     * @param executor 被执行的方法
+     * @param task 被执行的方法
      * @param <T>      返回值类型
      * @return 返回被执行方法所返回的结果
      * @throws Exception            执行方法异常
@@ -52,12 +53,12 @@ class Locker {
      * @throws LockerException      获取锁超过重复次数上限
     </T> */
     @Throws(Exception::class)
-    fun <T> tryLock(lock: Lock, timeOut: Long, timeUnit: TimeUnit, executor: Executor<T>): T {
+    fun <T> tryLock(lock: Lock, timeOut: Long, timeUnit: TimeUnit, task: Callable<T>): T {
         var locked = false
         val result: T
         try {
             locked = tryLock(lock, timeOut, timeUnit)
-            result = executor.execute()
+            result = task.call()
         } finally {
             if (locked) {
                 lock.unlock()
@@ -70,18 +71,18 @@ class Locker {
      * 直接获取锁并执行传入方法
      *
      * @param lock     锁对象
-     * @param executor 被执行的方法
+     * @param task 被执行的方法
      * @param <T>      返回值类型
      * @return 返回被执行方法所返回的结果
      * @throws Exception            执行方法异常
      * @throws InterruptedException 获取锁失败
     </T> */
     @Throws(Exception::class)
-    fun <T> lock(lock: Lock, executor: Executor<T>): T {
+    fun <T> lock(lock: Lock, task: Callable<T>): T {
         val result: T
         result = try {
             lock.lockInterruptibly()
-            executor.execute()
+            task.call()
         } finally {
             try {
                 lock.unlock()
@@ -109,7 +110,7 @@ class Locker {
         val executor = Executors.newSingleThreadScheduledExecutor()
         while (!locked) {
             if (count >= MAX_COUNT) {
-                throw LockerException("Retry over max times [" + MAX_COUNT + "].")
+                throw LockerException("Retry over max times [$MAX_COUNT].")
             }
             val future = executor.schedule<Boolean>({
                 try {
@@ -123,15 +124,5 @@ class Locker {
             count++
         }
         return true
-    }
-
-    /**
-     * Executor
-     *
-     * @param <T> 返回值类型
-    </T> */
-    fun interface Executor<T> {
-        @Throws(Exception::class)
-        fun execute(): T
     }
 }
