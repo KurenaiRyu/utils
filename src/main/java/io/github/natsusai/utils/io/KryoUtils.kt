@@ -55,10 +55,7 @@ class KryoUtils {
      * @param <T> 对象的类型
      * @return 序列化后的字节数组
     </T> */
-    fun <T> writeToByteArray(obj: T?): ByteArray? {
-        if (obj == null) {
-            return null
-        }
+    fun <T> writeToByteArray(obj: T): ByteArray {
         val kryo = instance
         try {
             ByteArrayOutputStream().use { byteArrayOutputStream ->
@@ -82,11 +79,9 @@ class KryoUtils {
      * @param <T> 对象的类型
      * @return 序列化后的字符串
     </T> */
-    fun <T> writeToString(obj: T?): String? {
+    fun <T> writeToString(obj: T): String {
         return try {
-            if (obj == null) {
-                null
-            } else String(Base64.encodeBase64(writeToByteArray(obj)), DEFAULT_ENCODING)
+            String(Base64.encodeBase64(writeToByteArray(obj)), DEFAULT_ENCODING)
         } catch (e: UnsupportedEncodingException) {
             throw IllegalStateException(e)
         }
@@ -99,7 +94,7 @@ class KryoUtils {
      * @param <T>       原对象的类型
      * @return 原对象
     </T> */
-    fun <T> readFromByteArray(byteArray: ByteArray): T? {
+    fun <T> readFromByteArray(byteArray: ByteArray): T {
         val kryo = instance
         try {
             ByteArrayInputStream(byteArray).use { byteArrayInputStream ->
@@ -123,7 +118,7 @@ class KryoUtils {
      * @param <T> 原对象的类型
      * @return 原对象
     </T> */
-    fun <T> readFromString(str: String): T? {
+    fun <T> readFromString(str: String): T {
         return try {
             readFromByteArray(Base64.decodeBase64(str.toByteArray(DEFAULT_ENCODING)))
         } catch (e: UnsupportedEncodingException) {
@@ -141,10 +136,7 @@ class KryoUtils {
      * @param <T> 对象的类型
      * @return 序列化后的字节数组
     </T> */
-    fun <T> writeObjectToByteArray(obj: T?): ByteArray? {
-        if (obj == null) {
-            return null
-        }
+    fun <T> writeObjectToByteArray(obj: T): ByteArray {
         val kryo = instance
         try {
             ByteArrayOutputStream().use { byteArrayOutputStream ->
@@ -168,11 +160,9 @@ class KryoUtils {
      * @param <T> 对象的类型
      * @return 序列化后的字符串
     </T> */
-    fun <T> writeObjectToString(obj: T?): String? {
+    fun <T> writeObjectToString(obj: T): String {
         return try {
-            if (obj == null) {
-                null
-            } else String(Base64.encodeBase64(writeObjectToByteArray(obj)), DEFAULT_ENCODING)
+            String(Base64.encodeBase64(writeObjectToByteArray(obj)), DEFAULT_ENCODING)
         } catch (e: UnsupportedEncodingException) {
             throw IllegalStateException(e)
         }
@@ -186,10 +176,7 @@ class KryoUtils {
      * @param <T>       原对象的类型
      * @return 原对象
     </T> */
-    fun <T> readObjectFromByteArray(byteArray: ByteArray?, clazz: Class<T>?): T? {
-        if (byteArray == null) {
-            return null
-        }
+    fun <T> readObjectFromByteArray(byteArray: ByteArray, clazz: Class<T>): T {
         val kryo = instance
         try {
             ByteArrayInputStream(byteArray).use { byteArrayInputStream ->
@@ -215,11 +202,9 @@ class KryoUtils {
      * @param <T>   原对象的类型
      * @return 原对象
     </T> */
-    fun <T> readObjectFromString(str: String?, clazz: Class<T>?): T? {
+    fun <T> readObjectFromString(str: String, clazz: Class<T>): T {
         return try {
-            if (str == null) {
-                null
-            } else readObjectFromByteArray(Base64.decodeBase64(str.toByteArray(DEFAULT_ENCODING)), clazz)
+            readObjectFromByteArray(Base64.decodeBase64(str.toByteArray(DEFAULT_ENCODING)), clazz)
         } catch (e: UnsupportedEncodingException) {
             throw IllegalStateException(e)
         }
