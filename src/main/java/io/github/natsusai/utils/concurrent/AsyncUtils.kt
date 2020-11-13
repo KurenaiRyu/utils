@@ -46,6 +46,76 @@ class AsyncUtils {
         }
 
         /**
+         * 调用线程池执行传入方法并调用回调方法
+         *
+         * @param task         执行任务
+         * @param callbackTask 回调方法
+         * @param executor     线程池
+         */
+        fun <T> execute(task: Callable<T>, callbackTask: CallbackTask<T>, executor: ExecutorService) {
+            execute(task, callbackTask, null, executor)
+        }
+
+        /**
+         * 调用线程池执行传入方法并调用回调方法
+         *
+         * @param task         执行任务
+         * @param callbackTask 回调方法
+         * @param caseTask     异常回调方法
+         * @param executor     线程池
+         */
+        fun <T> execute(
+            task: Callable<T>,
+            callbackTask: CallbackTask<T>,
+            caseTask: CallbackTask<Throwable>?,
+            executor: ExecutorService
+        ) {
+            val future = executor.submit(task)
+            executor.execute {
+                try {
+                    callbackTask.callback(future.get())
+                } catch (e: Exception) {
+                    when(e) {
+                        is InterruptedException,
+                        is ExecutionException -> {
+                            caseTask?.callback(e)?:e.printStackTrace()
+                        }
+                        else -> throw e
+                    }
+                }
+            }
+        }
+
+        /**
+         * 调用线程池执行传入方法并调用回调方法
+         *
+         * @param task         执行任务
+         * @param callbackTask 回调方法
+         */
+        fun <T> execute(task: Callable<T>, callbackTask: CallbackTask<T>) {
+            execute(task, callbackTask, null)
+        }
+
+        /**
+         * 调用线程池执行传入方法并调用回调方法
+         *
+         * @param task         执行任务
+         * @param callbackTask 回调方法
+         * @param caseTask     异常回调方法
+         */
+        fun <T> execute(task: Callable<T>, callbackTask: CallbackTask<T>, caseTask: CallbackTask<Throwable>?) {
+            val future = FutureTask(task)
+            Thread(future).start()
+            Thread {
+                try {
+                    callbackTask.callback(future.get())
+                } catch (e: Exception) {
+                    handleEx(e, caseTask)
+                }
+            }
+        }
+
+        /**
          * 获取结果
          *
          * @param future   Future
@@ -62,5 +132,24 @@ class AsyncUtils {
                 null
             }
         }
+
+        @Throws(Exception::class)
+        private fun handleEx(e: Exception, caseTask: CallbackTask<Throwable>?) {
+            when(e) {
+                is InterruptedException,
+                is ExecutionException -> {
+                    caseTask?.callback(e)?:e.printStackTrace()
+                }
+                else -> throw e
+            }
+        }
+    }
+
+    /**
+     * 回调任务接口
+     */
+    interface CallbackTask<T> {
+        @Throws(Exception::class)
+        fun callback(result: T)
     }
 }
