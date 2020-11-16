@@ -129,6 +129,7 @@ class AsyncUtils {
             return try {
                 future[timeout, timeUnit]
             } catch (e: TimeoutException) {
+                //TODO: 返回null无法区分是否是time out 造成
                 null
             }
         }
@@ -143,13 +144,5 @@ class AsyncUtils {
                 else -> throw e
             }
         }
-    }
-
-    /**
-     * 回调任务接口
-     */
-    interface CallbackTask<T> {
-        @Throws(Exception::class)
-        fun callback(result: T)
     }
 }
